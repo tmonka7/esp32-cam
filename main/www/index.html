@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP32-S3 CAM Gateway</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #2c313a;
+    --fg: #e7e9ee; --muted: #9aa3b2; --accent: #4da3ff; --bad: #ff6b6b; --good: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  header {
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  #status { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  nav button {
+    background: none; border: 1px solid transparent; color: var(--muted);
+    padding: 6px 12px; cursor: pointer; border-radius: 4px; font: inherit;
+  }
+  nav button.on { color: var(--fg); border-color: var(--line); background: var(--panel); }
+  main { padding: 16px; max-width: 1100px; }
+  section { display: none; }
+  section.on { display: block; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-bottom: 14px; }
+  .panel h2 { font-size: 13px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  label { color: var(--muted); min-width: 92px; }
+  input, select, button.act {
+    background: #12141a; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 4px; padding: 6px 8px; font: inherit;
+  }
+  input { width: 110px; }
+  input.wide { width: 260px; }
+  button.act { cursor: pointer; background: #262b34; }
+  button.act:hover { border-color: var(--accent); }
+  img#video { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #000; display: block; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  pre { background: #12141a; border: 1px solid var(--line); border-radius: 4px; padding: 10px; overflow: auto; max-height: 320px; margin: 0; white-space: pre-wrap; word-break: break-all; }
+  .ok { color: var(--good); } .err { color: var(--bad); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ESP32-S3 CAM Gateway</h1>
+  <span id="status">connecting…</span>
+</header>
+
+<nav>
+  <button class="on" data-tab="camera">Camera</button>
+  <button data-tab="gpio">GPIO</button>
+  <button data-tab="uart">UART</button>
+  <button data-tab="modbus">Modbus</button>
+  <button data-tab="console">Console</button>
+</nav>
+
+<main>
+
+<section id="camera" class="on">
+  <div class="panel">
+    <h2>Live view</h2>
+    <img id="video" alt="stream">
+    <div class="row" style="margin-top:10px">
+      <button class="act" id="camStart">Start stream</button>
+      <button class="act" id="camStop">Stop</button>
+      <button class="act" id="camShot">Snapshot</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Sensor</h2>
+    <div class="row">
+      <label>Resolution</label>
+      <select id="framesize">
+        <option value="13">UXGA 1600x1200</option>
+        <option value="12">SXGA 1280x1024</option>
+        <option value="11">HD 1280x720</option>
+        <option value="10">XGA 1024x768</option>
+        <option value="9">SVGA 800x600</option>
+        <option value="8">VGA 640x480</option>
+        <option value="6">CIF 400x296</option>
+        <option value="5">QVGA 320x240</option>
+      </select>
+      <label>Quality</label><input type="number" id="quality" min="4" max="63">
+    </div>
+    <div class="row">
+      <label>Brightness</label><input type="number" id="brightness" min="-2" max="2">
+      <label>Contrast</label><input type="number" id="contrast" min="-2" max="2">
+      <label>Saturation</label><input type="number" id="saturation" min="-2" max="2">
+    </div>
+    <div class="row">
+      <label>H-mirror</label><input type="number" id="hmirror" min="0" max="1">
+      <label>V-flip</label><input type="number" id="vflip" min="0" max="1">
+      <button class="act" id="camApply">Apply</button>
+    </div>
+  </div>
+</section>
+
+<section id="gpio">
+  <div class="panel">
+    <h2>Configured pins</h2>
+    <table id="gpioTable"><thead><tr><th>Pin</th><th>Mode</th><th>Level</th><th></th></tr></thead><tbody></tbody></table>
+    <p class="hint">Camera, UART, Modbus, USB, console and flash pins are refused by the firmware.</p>
+  </div>
+  <div class="panel">
+    <h2>Configure</h2>
+    <div class="row">
+      <label>Pin</label><input type="number" id="gpPin" min="0" max="48" value="1">
+      <label>Mode</label>
+      <select id="gpMode">
+        <option value="out">output</option>
+        <option value="od">output open-drain</option>
+        <option value="in">input</option>
+        <option value="inpu">input pull-up</option>
+        <option value="inpd">input pull-down</option>
+        <option value="off">release</option>
+      </select>
+      <button class="act" id="gpApply">Apply</button>
+      <button class="act" id="gpSave">Save to NVS</button>
+    </div>
+  </div>
+</section>
+
+<section id="uart">
+  <div class="panel">
+    <h2>Bridge</h2>
+    <div class="row">
+      <label>Baud</label><input type="number" id="uartBaud" value="115200">
+      <button class="act" id="uartBaudSet">Set</button>
+      <button class="act" id="uartFlush">Flush</button>
+      <span id="uartStats" class="hint"></span>
+    </div>
+    <div class="row">
+      <label>Send text</label><input class="wide" id="uartText" placeholder="hello\n as literal text">
+      <button class="act" id="uartSendText">Send</button>
+    </div>
+    <div class="row">
+      <label>Send hex</label><input class="wide" id="uartHex" placeholder="01 03 → 0103">
+      <button class="act" id="uartSendHex">Send</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Received</h2>
+    <pre id="uartOut"></pre>
+    <p class="hint">Polled twice a second; reading drains the buffer.</p>
+  </div>
+</section>
+
+<section id="modbus">
+  <div class="panel">
+    <h2>Poll table</h2>
+    <table id="mbTable"><thead><tr><th>#</th><th>Name</th><th>Slave</th><th>Fn</th><th>Start</th><th>Count</th><th>Age</th><th>OK/Err</th><th>Values</th></tr></thead><tbody></tbody></table>
+    <div class="row" style="margin-top:10px">
+      <button class="act" id="mbPollOn">Polling on</button>
+      <button class="act" id="mbPollOff">Polling off</button>
+      <span id="mbState" class="hint"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Add / replace a poll job</h2>
+    <div class="row">
+      <label>Slot</label><input type="number" id="jobIndex" min="0" max="7" value="0">
+      <label>Name</label><input id="jobName" value="meter">
+      <label>Slave</label><input type="number" id="jobSlave" min="1" max="247" value="1">
+    </div>
+    <div class="row">
+      <label>Function</label>
+      <select id="jobFn">
+        <option value="3">3 read holding</option>
+        <option value="4">4 read input</option>
+        <option value="1">1 read coils</option>
+        <option value="2">2 read discrete</option>
+      </select>
+      <label>Start</label><input type="number" id="jobStart" value="0">
+      <label>Count</label><input type="number" id="jobCount" value="10">
+      <button class="act" id="jobSet">Set</button>
+      <button class="act" id="jobSave">Save to NVS</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>One-shot transaction</h2>
+    <div class="row">
+      <label>Slave</label><input type="number" id="txSlave" min="1" max="247" value="1">
+      <label>Function</label>
+      <select id="txFn">
+        <option value="3">3 read holding</option>
+        <option value="4">4 read input</option>
+        <option value="1">1 read coils</option>
+        <option value="2">2 read discrete</option>
+        <option value="6">6 write holding</option>
+        <option value="16">16 write holdings</option>
+        <option value="5">5 write coil</option>
+        <option value="15">15 write coils</option>
+      </select>
+      <label>Start</label><input type="number" id="txStart" value="0">
+    </div>
+    <div class="row">
+      <label>Count</label><input type="number" id="txCount" value="1">
+      <label>Values</label><input class="wide" id="txValues" placeholder="writes only: 1,2,3">
+      <button class="act" id="txGo">Execute</button>
+    </div>
+    <pre id="txOut"></pre>
+  </div>
+</section>
+
+<section id="console">
+  <div class="panel">
+    <h2>Command console</h2>
+    <div class="row">
+      <input class="wide" id="cmdLine" placeholder="status" style="flex:1">
+      <button class="act" id="cmdGo">Run</button>
+    </div>
+    <pre id="cmdOut">type "help" and press enter</pre>
+    <p class="hint">Same command set as the BLE Nordic-UART characteristic.</p>
+  </div>
+  <div class="panel">
+    <h2>Wi-Fi credentials</h2>
+    <div class="row">
+      <label>SSID</label><input class="wide" id="wifiSsid">
+      <label>Password</label><input class="wide" id="wifiPass" type="password">
+      <button class="act" id="wifiSave">Store</button>
+    </div>
+    <p class="hint">Saved to NVS; takes effect after a reboot.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = (path, opts) => fetch(path, opts).then(r => r.json().catch(() => ({})));
+const streamBase = `http://${location.hostname}:81`;
+
+/* tabs */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  $(b.dataset.tab).classList.add('on');
+});
+
+/* ---- status ---- */
+async function refreshStatus() {
+  try {
+    const s = await api('/api/status');
+    const w = s.wifi || {};
+    $('status').innerHTML =
+      `${w.connected ? `<span class="ok">${w.ssid} ${w.ip} ${w.rssi}dBm</span>`
+                     : '<span class="err">wifi down</span>'}` +
+      ` · cam ${s.camera?.ready ? s.camera.sensor : '<span class="err">offline</span>'}` +
+      ` · ble ${s.ble?.connected ? 'connected' : 'advertising'}` +
+      ` · heap ${Math.round((s.heap_free || 0) / 1024)}k` +
+      ` · up ${s.uptime_s}s`;
+  } catch (e) {
+    $('status').innerHTML = '<span class="err">unreachable</span>';
+  }
+}
+
+/* ---- camera ---- */
+$('camStart').onclick = () => { $('video').src = `${streamBase}/stream`; };
+$('camStop').onclick  = () => { $('video').src = ''; };
+$('camShot').onclick  = () => { $('video').src = `/capture?t=${Date.now()}`; };
+
+const CAM_FIELDS = ['framesize','quality','brightness','contrast','saturation','hmirror','vflip'];
+
+async function loadCamera() {
+  const c = await api('/api/camera');
+  for (const k of CAM_FIELDS) {
+    if (c.settings && k in c.settings) $(k).value = c.settings[k];
+  }
+}
+
+$('camApply').onclick = async () => {
+  const body = {};
+  for (const k of CAM_FIELDS) body[k] = Number($(k).value);
+  await api('/api/camera', { method: 'POST', body: JSON.stringify(body) });
+  /* Reloading the stream picks up a resolution change immediately. */
+  if ($('video').src.includes('/stream')) $('video').src = `${streamBase}/stream?t=${Date.now()}`;
+};
+
+/* ---- gpio ---- */
+function renderGpio(d) {
+  const tb = $('gpioTable').querySelector('tbody');
+  tb.innerHTML = '';
+  (d.pins || []).forEach(p => {
+    const tr = document.createElement('tr');
+    const toggle = p.mode.startsWith('output')
+      ? `<button class="act" data-pin="${p.pin}" data-lvl="${p.level ? 0 : 1}">set ${p.level ? 0 : 1}</button>`
+      : '';
+    tr.innerHTML = `<td>GPIO${p.pin}</td><td>${p.mode}</td><td>${p.level}</td><td>${toggle}</td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('button').forEach(b => b.onclick = async () => {
+    renderGpio(await api('/api/gpio', {
+      method: 'POST',
+      body: JSON.stringify({ pin: Number(b.dataset.pin), level: Number(b.dataset.lvl) })
+    }));
+  });
+}
+
+async function loadGpio() { renderGpio(await api('/api/gpio')); }
+
+$('gpApply').onclick = async () => {
+  const r = await api('/api/gpio', {
+    method: 'POST',
+    body: JSON.stringify({ pin: Number($('gpPin').value), mode: $('gpMode').value })
+  });
+  if (r.error) alert(r.error); else renderGpio(r);
+};
+$('gpSave').onclick = async () => {
+  await api('/api/gpio', {
+    method: 'POST',
+    body: JSON.stringify({ pin: Number($('gpPin').value), save: true })
+  });
+};
+
+/* ---- uart ---- */
+let uartLog = '';
+async function pollUart() {
+  if (!$('uart').classList.contains('on')) return;
+  const d = await api('/api/uart');
+  if (d.length > 0) {
+    uartLog += d.text;
+    uartLog = uartLog.slice(-8000);
+    $('uartOut').textContent = uartLog;
+    $('uartOut').scrollTop = $('uartOut').scrollHeight;
+  }
+  $('uartStats').textContent =
+    `rx ${d.total_rx} · tx ${d.total_tx} · dropped ${d.dropped}`;
+}
+$('uartBaudSet').onclick  = () => api('/api/uart', { method: 'POST', body: JSON.stringify({ baud: Number($('uartBaud').value) }) });
+$('uartFlush').onclick    = () => { uartLog = ''; $('uartOut').textContent = ''; api('/api/uart', { method: 'POST', body: JSON.stringify({ flush: true }) }); };
+$('uartSendText').onclick = () => api('/api/uart', { method: 'POST', body: JSON.stringify({ text: $('uartText').value }) });
+$('uartSendHex').onclick  = () => api('/api/uart', { method: 'POST', body: JSON.stringify({ hex: $('uartHex').value.replace(/[^0-9a-fA-F]/g, '') }) });
+
+/* ---- modbus ---- */
+function renderModbus(d) {
+  $('mbState').textContent = `polling ${d.polling ? 'on' : 'off'}, every ${d.period_ms} ms`;
+  const tb = $('mbTable').querySelector('tbody');
+  tb.innerHTML = '';
+  (d.jobs || []).forEach(j => {
+    const bad = j.status !== 'ESP_OK';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${j.index}</td><td>${j.name || '-'}</td><td>${j.slave}</td>` +
+      `<td>${j.function}</td><td>${j.start}</td><td>${j.count}</td>` +
+      `<td>${j.age_ms < 0 ? '-' : j.age_ms + 'ms'}</td>` +
+      `<td class="${bad ? 'err' : 'ok'}">${j.ok}/${j.errors}</td>` +
+      `<td>${(j.values || []).join(' ')}</td>`;
+    tb.appendChild(tr);
+  });
+}
+async function loadModbus() { renderModbus(await api('/api/modbus')); }
+
+const mbPost = (body) => api('/api/modbus', { method: 'POST', body: JSON.stringify(body) });
+
+$('mbPollOn').onclick  = async () => renderModbus(await mbPost({ action: 'poll', enabled: true }));
+$('mbPollOff').onclick = async () => renderModbus(await mbPost({ action: 'poll', enabled: false }));
+
+$('jobSet').onclick = async () => {
+  const r = await mbPost({
+    action: 'job', index: Number($('jobIndex').value), enabled: true,
+    name: $('jobName').value, slave: Number($('jobSlave').value),
+    function: Number($('jobFn').value), start: Number($('jobStart').value),
+    count: Number($('jobCount').value)
+  });
+  if (r.error) alert(r.error); else renderModbus(r);
+};
+$('jobSave').onclick = () => mbPost({ action: 'job', index: Number($('jobIndex').value), enabled: true,
+  name: $('jobName').value, slave: Number($('jobSlave').value),
+  function: Number($('jobFn').value), start: Number($('jobStart').value),
+  count: Number($('jobCount').value), save: true });
+
+$('txGo').onclick = async () => {
+  const fn = Number($('txFn').value);
+  const writing = [5, 6, 15, 16].includes(fn);
+  const body = { action: writing ? 'write' : 'read', slave: Number($('txSlave').value),
+                 function: fn, start: Number($('txStart').value) };
+  if (writing) {
+    body.values = $('txValues').value.split(/[\s,]+/).filter(Boolean).map(Number);
+  } else {
+    body.count = Number($('txCount').value);
+  }
+  const r = await mbPost(body);
+  $('txOut').textContent = r.error ? `error: ${r.error}` : JSON.stringify(r.values ?? r);
+};
+
+/* ---- console ---- */
+async function runCmd() {
+  const line = $('cmdLine').value;
+  if (!line) return;
+  const r = await fetch('/api/cmd', { method: 'POST', body: line });
+  $('cmdOut').textContent = await r.text();
+  $('cmdLine').value = '';
+}
+$('cmdGo').onclick = runCmd;
+$('cmdLine').addEventListener('keydown', e => { if (e.key === 'Enter') runCmd(); });
+
+$('wifiSave').onclick = async () => {
+  const r = await api('/api/wifi', {
+    method: 'POST',
+    body: JSON.stringify({ ssid: $('wifiSsid').value, password: $('wifiPass').value })
+  });
+  alert(r.ok ? 'stored, reboot to apply' : (r.error || 'failed'));
+};
+
+/* ---- timers ---- */
+refreshStatus();
+loadCamera();
+loadGpio();
+loadModbus();
+setInterval(refreshStatus, 3000);
+setInterval(() => { if ($('gpio').classList.contains('on')) loadGpio(); }, 2000);
+setInterval(() => { if ($('modbus').classList.contains('on')) loadModbus(); }, 1500);
+setInterval(pollUart, 500);
+</script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+menu "ESP32-S3 CAM Gateway"
+
+    menu "Wi-Fi"
+
+        config APP_WIFI_SSID
+            string "Station SSID"
+            default "myssid"
+            help
+                Joined at boot. Can be overridden at runtime over BLE or the
+                web UI; the runtime value is kept in NVS and wins over this.
+
+        config APP_WIFI_PASSWORD
+            string "Station password"
+            default "mypassword"
+
+        config APP_WIFI_MAX_RETRY
+            int "Connect attempts before falling back to SoftAP"
+            range 1 20
+            default 6
+
+        config APP_WIFI_RETRY_PERIOD_S
+            int "Seconds between background reconnect attempts"
+            range 10 600
+            default 30
+
+        config APP_AP_SSID
+            string "Fallback SoftAP SSID"
+            default "esp32s3-cam"
+
+        config APP_AP_PASSWORD
+            string "Fallback SoftAP password (8..63 chars, empty = open network)"
+            default "12345678"
+
+    endmenu
+
+    menu "Camera pins"
+
+        comment "Defaults are the Freenove / Goouuu ESP32-S3-CAM (OV2640)"
+
+        config APP_CAM_PIN_PWDN
+            int "PWDN (-1 = not connected)"
+            default -1
+
+        config APP_CAM_PIN_RESET
+            int "RESET (-1 = not connected)"
+            default -1
+
+        config APP_CAM_PIN_XCLK
+            int "XCLK"
+            default 15
+
+        config APP_CAM_PIN_SIOD
+            int "SIOD / SDA"
+            default 4
+
+        config APP_CAM_PIN_SIOC
+            int "SIOC / SCL"
+            default 5
+
+        config APP_CAM_PIN_D7
+            int "D7 (Y9)"
+            default 16
+
+        config APP_CAM_PIN_D6
+            int "D6 (Y8)"
+            default 17
+
+        config APP_CAM_PIN_D5
+            int "D5 (Y7)"
+            default 18
+
+        config APP_CAM_PIN_D4
+            int "D4 (Y6)"
+            default 12
+
+        config APP_CAM_PIN_D3
+            int "D3 (Y5)"
+            default 10
+
+        config APP_CAM_PIN_D2
+            int "D2 (Y4)"
+            default 8
+
+        config APP_CAM_PIN_D1
+            int "D1 (Y3)"
+            default 9
+
+        config APP_CAM_PIN_D0
+            int "D0 (Y2)"
+            default 11
+
+        config APP_CAM_PIN_VSYNC
+            int "VSYNC"
+            default 6
+
+        config APP_CAM_PIN_HREF
+            int "HREF"
+            default 7
+
+        config APP_CAM_PIN_PCLK
+            int "PCLK"
+            default 13
+
+    endmenu
+
+    menu "Camera image"
+
+        config APP_CAM_XCLK_FREQ_HZ
+            int "XCLK frequency (Hz)"
+            default 20000000
+            help
+                20 MHz suits the OV2640. Drop to 10000000 if the sensor
+                produces corrupted frames on long ribbon cables.
+
+        config APP_CAM_JPEG_QUALITY
+            int "JPEG quality (10 = best, 63 = worst)"
+            range 4 63
+            default 12
+
+        config APP_CAM_FB_COUNT
+            int "Frame buffers (PSRAM builds)"
+            range 1 3
+            default 2
+
+    endmenu
+
+    menu "UART bridge"
+
+        config APP_UART_PORT_NUM
+            int "UART port for the transparent bridge"
+            range 1 2
+            default 2
+            help
+                Must differ from the Modbus port. UART0 is the console.
+
+        config APP_UART_TX_GPIO
+            int "Bridge TX GPIO"
+            default 42
+
+        config APP_UART_RX_GPIO
+            int "Bridge RX GPIO"
+            default 41
+
+        config APP_UART_BAUD
+            int "Bridge baud rate"
+            default 115200
+
+        config APP_UART_RX_BUF
+            int "RX history buffer (bytes kept for /api/uart)"
+            range 256 16384
+            default 4096
+
+    endmenu
+
+    menu "Modbus RTU master"
+
+        config APP_MB_UART_PORT
+            int "UART port used for Modbus RTU"
+            range 1 2
+            default 1
+
+        config APP_MB_TX_GPIO
+            int "Modbus TX GPIO (RS-485 DI)"
+            default 47
+
+        config APP_MB_RX_GPIO
+            int "Modbus RX GPIO (RS-485 RO)"
+            default 21
+
+        config APP_MB_RTS_GPIO
+            int "Modbus RTS GPIO (RS-485 DE/RE, -1 for plain TTL UART)"
+            default 14
+
+        config APP_MB_BAUD
+            int "Modbus baud rate"
+            default 9600
+
+        choice APP_MB_PARITY
+            prompt "Modbus parity"
+            default APP_MB_PARITY_NONE
+            config APP_MB_PARITY_NONE
+                bool "None (8N1)"
+            config APP_MB_PARITY_EVEN
+                bool "Even (8E1)"
+            config APP_MB_PARITY_ODD
+                bool "Odd (8O1)"
+        endchoice
+
+        config APP_MB_POLL_PERIOD_MS
+            int "Poll loop period (ms)"
+            range 50 60000
+            default 1000
+
+        config APP_MB_AUTOSTART_POLL
+            bool "Start the poll loop at boot"
+            default y
+
+    endmenu
+
+    menu "Bluetooth LE"
+
+        config APP_BLE_ENABLED
+            bool "Enable the BLE command service"
+            default y
+
+        config APP_BLE_DEVICE_NAME
+            string "Advertised device name"
+            default "ESP32S3-CAM"
+
+    endmenu
+
+endmenu

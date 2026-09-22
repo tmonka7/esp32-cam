@@ -1,0 +1,8 @@
+# ESP32-S3-CAM gateway, 8 MB flash.
+# Camera + Wi-Fi + NimBLE + HTTP server is a large binary, so the app slot is
+# generous and there is no second OTA slot.
+# Name,     Type, SubType, Offset,  Size, Flags
+nvs,        data, nvs,     ,        24K,
+phy_init,   data, phy,     ,        4K,
+factory,    app,  factory, ,        4M,
+storage,    data, spiffs,  ,        1M,

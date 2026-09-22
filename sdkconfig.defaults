@@ -1,0 +1,74 @@
+# Defaults for the Freenove / Goouuu ESP32-S3-CAM (ESP32-S3-WROOM-1 N8R8).
+# Run `idf.py set-target esp32s3` once, then `idf.py build`.
+
+CONFIG_IDF_TARGET="esp32s3"
+
+#
+# Flash: 8 MB, QIO @ 80 MHz
+#
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+#
+# Custom partition table (see partitions.csv)
+#
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+#
+# PSRAM. The N8R8 module carries 8 MB of *octal* PSRAM; without it the camera
+# is limited to QVGA single-buffer. If your module is an N8R2 (quad PSRAM),
+# switch CONFIG_SPIRAM_MODE_OCT to CONFIG_SPIRAM_MODE_QUAD.
+#
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+
+#
+# Performance
+#
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+
+#
+# Networking. The MJPEG stream holds a socket open for minutes at a time, so
+# the stream lives on its own httpd instance (port 81) and the socket pool is
+# widened for the handful of API calls the UI makes alongside it.
+#
+CONFIG_LWIP_MAX_SOCKETS=16
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=512
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32
+
+#
+# Bluetooth LE (NimBLE host, peripheral role only)
+#
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=2
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+
+#
+# Wi-Fi and BLE share one radio; software coexistence must be on or the
+# MJPEG stream stalls whenever a phone connects over BLE.
+#
+CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
+
+#
+# Modbus (espressif/esp-modbus). Response timeout is per-transaction; raise it
+# for slow slaves or long RS-485 runs.
+#
+CONFIG_FMB_MASTER_TIMEOUT_MS_RESPOND=200
+CONFIG_FMB_QUEUE_LENGTH=20
+CONFIG_FMB_SERIAL_TASK_STACK_SIZE=4096
