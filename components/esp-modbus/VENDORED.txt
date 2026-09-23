@@ -1,0 +1,7 @@
+﻿component: esp-modbus
+upstream:  https://github.com/espressif/esp-modbus.git
+tag:       v1.0.9
+commit:    8e3771847f826aad37491b96b2b4a2de8d2cbf76
+vendored:  2026-09-22
+
+Regenerate with tools/vendor_components.ps1 - do not edit by hand.

@@ -1,7 +1,16 @@
-build/
-managed_components/
-dependencies.lock
-sdkconfig
-sdkconfig.old
+# Anchored to the project root on purpose. An unanchored "build/" or
+# "sdkconfig" would also match inside components/, silently dropping vendored
+# third-party files from version control and breaking the offline build for
+# whoever clones next.
+/build/
+/sdkconfig
+/sdkconfig.old
+
+# Artifacts of an online (component-manager) build. Neither should ever appear
+# now that every component is vendored under components/ — ignored so that an
+# accidental online build cannot add them to the repo.
+/managed_components/
+/dependencies.lock
+
 *.swp
 .vscode/
