@@ -25,10 +25,19 @@ static SemaphoreHandle_t s_bus_lock;    /* serialises transactions   */
 static SemaphoreHandle_t s_job_lock;    /* protects the job table    */
 static app_mb_job_t      s_jobs[APP_MB_MAX_JOBS];
 
-static bool is_bitwise(uint8_t fn)
+/* Functions whose payload the stack treats as a packed bit array, eight bits
+ * to a byte. Note that function 5 is NOT one of them: the stack reads a bare
+ * uint16_t for it and insists on the wire encoding 0xFF00 / 0x0000. */
+static bool is_bit_packed(uint8_t fn)
 {
     return fn == APP_MB_FN_READ_COILS || fn == APP_MB_FN_READ_DISCRETE ||
-           fn == APP_MB_FN_WRITE_COIL || fn == APP_MB_FN_WRITE_COILS;
+           fn == APP_MB_FN_WRITE_COILS;
+}
+
+/* Functions that take exactly one value, passed as a single uint16_t. */
+static bool is_single_value(uint8_t fn)
+{
+    return fn == APP_MB_FN_WRITE_COIL || fn == APP_MB_FN_WRITE_HOLDING;
 }
 
 static bool is_supported(uint8_t fn)
@@ -65,22 +74,37 @@ esp_err_t app_modbus_request(uint8_t slave, uint8_t function,
     if (slave < 1 || slave > 247) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (is_single_value(function) && count != 1) {
+        /* Functions 5 and 6 carry exactly one value. Use 15 or 16 for more. */
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (function != APP_MB_FN_READ_COILS && function != APP_MB_FN_READ_DISCRETE &&
+        function != APP_MB_FN_READ_HOLDING && function != APP_MB_FN_READ_INPUT &&
+        in == NULL) {
+        return ESP_ERR_INVALID_ARG;   /* a write with nothing to write */
+    }
 
-    /* The stack wants bits packed eight to a byte for coil functions and
-     * plain 16-bit words for register functions. Callers deal in one word
-     * per item either way. */
+    /* Three payload shapes, all hidden from the caller, who always deals in
+     * one uint16_t per coil or register:
+     *   bit-packed byte array  - functions 1, 2, 15
+     *   single uint16_t        - functions 5, 6
+     *   uint16_t array         - functions 3, 4, 16
+     * Function 5 is the odd one out: the stack rejects any value that is not
+     * the Modbus wire encoding 0xFF00 (on) or 0x0000 (off). */
     uint8_t  bits[(APP_MB_MAX_REGS + 7) / 8] = { 0 };
     uint16_t regs[APP_MB_MAX_REGS]           = { 0 };
-    bool     bitwise = is_bitwise(function);
-    void    *payload = bitwise ? (void *)bits : (void *)regs;
+    bool     packed  = is_bit_packed(function);
+    void    *payload = packed ? (void *)bits : (void *)regs;
 
     if (in != NULL) {
-        if (bitwise) {
+        if (packed) {
             for (uint16_t i = 0; i < count; i++) {
                 if (in[i]) {
                     bits[i / 8] |= (uint8_t)(1u << (i % 8));
                 }
             }
+        } else if (function == APP_MB_FN_WRITE_COIL) {
+            regs[0] = in[0] ? 0xFF00 : 0x0000;
         } else {
             memcpy(regs, in, (size_t)count * sizeof(uint16_t));
         }
@@ -100,7 +124,7 @@ esp_err_t app_modbus_request(uint8_t slave, uint8_t function,
     if (err == ESP_OK && out != NULL) {
         size_t n = count < out_max ? count : out_max;
         for (size_t i = 0; i < n; i++) {
-            out[i] = bitwise ? (uint16_t)((bits[i / 8] >> (i % 8)) & 1u) : regs[i];
+            out[i] = packed ? (uint16_t)((bits[i / 8] >> (i % 8)) & 1u) : regs[i];
         }
     }
     return err;

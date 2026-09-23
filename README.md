@@ -17,14 +17,65 @@ Built for **ESP-IDF v5.3.x** (anything ≥ 5.1 should work).
 
 ## Build and flash
 
+**This project builds offline.** Nothing is fetched from the ESP component
+registry — both third-party components are committed under `components/`.
+
 ```bash
 idf.py set-target esp32s3
 idf.py menuconfig          # ESP32-S3 CAM Gateway → Wi-Fi → SSID/password
 idf.py build flash monitor
 ```
 
-The first build downloads two managed components: `espressif/esp32-camera` and
-`espressif/esp-modbus`.
+A working ESP-IDF v5.3.x installation is the only prerequisite.
+
+### Vendored components
+
+| Path | Version | Why pinned there |
+|---|---|---|
+| `components/esp32-camera` | v2.0.15 | Last release with **no** external dependencies. v2.1.x pulls in `espressif/esp_jpeg`, which would mean vendoring a third component. |
+| `components/esp-modbus` | v1.0.9 | Newest 1.0.x tag. The 2.x line replaced the `mbc_master_*` controller API used by `app_modbus.c`. |
+
+Each carries a `VENDORED.txt` recording its upstream URL, tag and commit.
+Development scaffolding (`.github`, `test`, `docs`, `examples`) was stripped;
+everything the component's own `CMakeLists.txt` references is present.
+
+To refresh them — the **only** step that needs network access:
+
+```powershell
+pwsh tools/vendor_components.ps1
+```
+
+Then commit `components/`.
+
+### How the offline guarantee is enforced
+
+- **No project manifest.** There is no `main/idf_component.yml`. The component
+  manager has nothing to resolve, so it never reaches the registry. The
+  ESP-IDF version requirement that used to live there is now a check in the
+  root `CMakeLists.txt`.
+- **The two manifests that remain** are upstream files inside the vendored
+  trees, and both declare only `idf`, which always resolves locally.
+- **`CMakeLists.txt` fails fast** with a readable message if `components/` is
+  missing, instead of a wall of "esp_camera.h: No such file or directory".
+- **`.gitignore` patterns are anchored** to the project root. An unanchored
+  `build/` or `sdkconfig` would also match inside `components/` and silently
+  drop vendored files from the repo.
+
+Do not re-add registry dependencies for these two: a registry entry alongside
+a local component of the same name is a conflict, and it puts the build back
+on the network.
+
+Verify at any time — both should print nothing:
+
+```bash
+# Registry dependencies are indented "namespace/name:" entries. Matching on
+# "espressif/" alone would false-positive on the url/repository metadata that
+# every upstream manifest carries.
+grep -rnE "^[[:space:]]+[a-z0-9_]+/[a-z0-9_-]+:" --include=idf_component.yml .
+
+# Vendored files that .gitignore would drop from the repo.
+git ls-files --others --ignored --exclude-standard components/
+```
 
 If the board cannot join the configured network it brings up a fallback SoftAP
 (`esp32s3-cam` / `12345678` by default) and keeps retrying the station in the
@@ -153,8 +204,12 @@ Function codes: 1 read coils, 2 read discrete inputs, 3 read holding
 registers, 4 read input registers, 5 write single coil, 6 write single
 register, 15 write multiple coils, 16 write multiple registers.
 
-Coils are exchanged as **one value per bit** (0 or 1) in both directions; the
-bit packing on the wire is handled by the firmware.
+Coils are exchanged as **one value per bit** (0 or 1) in both directions. The
+firmware handles the three payload encodings the stack expects underneath:
+packed bits for 1/2/15, a bare `uint16_t` for 6, and the Modbus wire encoding
+`0xFF00`/`0x0000` for 5.
+
+Functions 5 and 6 take exactly one value; use 15 or 16 for more.
 
 Up to 8 poll jobs, 64 registers each. Poll jobs are read-only on purpose —
 a write on a timer is a bad thing to have on a live plant bus, so writes
@@ -216,6 +271,11 @@ task, because a Modbus transaction can block for the response timeout.
 ## Layout
 
 ```
+components/       vendored third-party code, committed for offline builds
+  esp32-camera/
+  esp-modbus/
+tools/
+  vendor_components.ps1   regenerates the above (needs network)
 main/
   main.c          bring-up order
   app_camera.c    sensor init + named control get/set
@@ -237,8 +297,9 @@ field bus.
 
 ## Notes and limits
 
-- `esp-modbus` is pinned to `^1.0.15`. The 2.x line replaced the
-  `mbc_master_*` controller API this code uses.
+- Modbus TCP and ASCII are compiled out (`CONFIG_FMB_COMM_MODE_TCP_EN=n`,
+  `CONFIG_FMB_COMM_MODE_ASCII_EN=n`) — this gateway is an RTU master only.
+  Re-enable either in `sdkconfig.defaults` if you extend it.
 - Wi-Fi power save is disabled (`WIFI_PS_NONE`); it costs several frames per
   second on the stream. Turn it back on in `app_wifi.c` if you care more about
   current draw than frame rate.

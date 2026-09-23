@@ -1,0 +1,7 @@
+﻿component: esp32-camera
+upstream:  https://github.com/espressif/esp32-camera.git
+tag:       v2.0.15
+commit:    229adc65d4c5833ca40f99f7a5dcc6018392022d
+vendored:  2026-09-22
+
+Regenerate with tools/vendor_components.ps1 - do not edit by hand.
