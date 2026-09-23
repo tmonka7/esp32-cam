@@ -197,6 +197,46 @@ menu "ESP32-S3 CAM Gateway"
 
     endmenu
 
+    menu "Ultrasonic person detector"
+
+        comment "Avoid 0/3/45/46 (strapping) and 48 (onboard RGB LED)"
+
+        config APP_ULTRASONIC_TRIG_GPIO
+            int "Trigger GPIO"
+            default 1
+            help
+                Driven by the ESP32. Any free output pin.
+
+        config APP_ULTRASONIC_ECHO_GPIO
+            int "Echo GPIO"
+            default 2
+            help
+                Driven by the sensor, so never put this on GPIO45: that is
+                the VDD_SPI strapping pin and a high level at reset sets the
+                flash rail to 1.8 V, which stops the board booting.
+
+                A 5 V HC-SR04 drives ECHO at 5 V and the S3 is not 5 V
+                tolerant. Use a divider (1k to ECHO, 2k to GND) or a 3.3 V
+                module such as the RCWL-1601.
+
+        config APP_ULTRASONIC_LIGHT_GPIO
+            int "Light output GPIO"
+            default 38
+            help
+                Goes high while someone is detected.
+
+        config APP_ULTRASONIC_DETECTION_THRESHOLD_CM
+            int "Person detection distance (cm)"
+            range 10 250
+            default 100
+
+        config APP_ULTRASONIC_PERSON_HOLD_MS
+            int "Detection hold time before turning off (ms)"
+            range 0 10000
+            default 2000
+
+    endmenu
+
     menu "Bluetooth LE"
 
         config APP_BLE_ENABLED

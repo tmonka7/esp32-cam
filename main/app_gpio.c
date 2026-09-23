@@ -55,6 +55,10 @@ static const struct {
     { CONFIG_APP_MB_RX_GPIO,    "Modbus RX"      },
     { CONFIG_APP_MB_RTS_GPIO,   "Modbus DE/RE"   },
 
+    { CONFIG_APP_ULTRASONIC_TRIG_GPIO,  "ultrasonic TRIG"  },
+    { CONFIG_APP_ULTRASONIC_ECHO_GPIO,  "ultrasonic ECHO"  },
+    { CONFIG_APP_ULTRASONIC_LIGHT_GPIO, "ultrasonic light" },
+
     { 19, "USB D-" },
     { 20, "USB D+" },
     { 43, "console TX" },

@@ -9,6 +9,7 @@ idf_component_register(
         "app_cmd.c"
         "app_ble.c"
         "app_httpd.c"
+        "app_ultrasonic.c"
     INCLUDE_DIRS "."
     EMBED_FILES "www/index.html"
     REQUIRES

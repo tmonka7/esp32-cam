@@ -11,6 +11,7 @@
 #include "app_httpd.h"
 #include "app_modbus.h"
 #include "app_uart.h"
+#include "app_ultrasonic.h"
 #include "app_wifi.h"
 
 static const char *TAG = "main";
@@ -43,6 +44,11 @@ void app_main(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "camera unavailable: %s (check the ribbon cable)",
                  esp_err_to_name(err));
+    }
+
+    err = app_ultrasonic_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ultrasonic detector unavailable: %s", esp_err_to_name(err));
     }
 
     err = app_ble_init();
